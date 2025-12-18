@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Hand-Controlled Particles</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; }
+        canvas { display: block; }
+        #video-feed { position: absolute; top: 0; left: 0; opacity: 0; } /* Hide the actual video feed */
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    </head>
+<body>
+    <video id="video-feed" autoplay playsinline></video>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
