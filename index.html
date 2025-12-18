@@ -1,89 +1,96 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Hand Particle System</title>
+    <meta charset="UTF-8">
+    <title>Hand Tracking Particles</title>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.5); padding: 5px; font-size: 12px; z-index: 10; }
         canvas { display: block; }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <script>
-        // Check if Three.js loaded
-        if (typeof THREE === 'undefined') {
-            document.body.innerHTML = "<h1 style='color:white'>Three.js failed to load. Check internet.</h1>";
-        }
+    <div id="status">Status: Loading Engine...</div>
 
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        const statusEl = document.getElementById('status');
+
+        // 1. Scene Setup
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
         camera.position.z = 20;
 
-        const count = 15000;
-        const geo = new THREE.BufferGeometry();
-        const pos = new Float32Array(count * 3);
-        const index = new Float32Array(count);
+        statusEl.innerText = "Status: Three.js Running";
 
-        for(let i=0; i<count; i++) {
-            index[i] = i;
-            pos[i*3] = (Math.random()-0.5)*10;
-            pos[i*3+1] = (Math.random()-0.5)*10;
-            pos[i*3+2] = (Math.random()-0.5)*10;
+        // 2. Particle Creation
+        const particleCount = 10000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 10;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+            
+            colors[i * 3] = Math.random();
+            colors[i * 3 + 1] = Math.random();
+            colors[i * 3 + 2] = 1.0;
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-        geo.setAttribute('aIndex', new THREE.BufferAttribute(index, 1));
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-        const mat = new THREE.ShaderMaterial({
-            uniforms: { uTime: { value: 0 }, uTemplate: { value: 0 } },
-            vertexShader: `
-                uniform float uTime;
-                uniform float uTemplate;
-                attribute float aIndex;
-                varying vec3 vColor;
-                void main() {
-                    float angle = (aIndex / 15000.0) * 6.28;
-                    vec3 p = vec3(cos(angle)*10.0, sin(angle)*10.0, 0.0);
-                    if(uTemplate > 0.5) { // Switch to Heart
-                         p.x = 16.0 * pow(sin(angle), 3.0) * 0.5;
-                         p.y = (13.0 * cos(angle) - 5.0 * cos(2.0*angle) - 2.0*cos(3.0*angle) - cos(4.0*angle)) * 0.5;
-                    }
-                    vColor = vec3(0.5 + 0.5*sin(uTime + angle), 0.8, 1.0);
-                    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-                    gl_PointSize = 3.0 * (100.0 / -mv.z);
-                    gl_Position = projectionMatrix * mv;
-                }
-            `,
-            fragmentShader: `
-                varying vec3 vColor;
-                void main() {
-                    if(length(gl_PointCoord - 0.5) > 0.5) discard;
-                    gl_FragColor = vec4(vColor, 1.0);
-                }
-            `,
+        const material = new THREE.PointsMaterial({
+            size: 0.05,
+            vertexColors: true,
             transparent: true,
-            blending: THREE.AdditiveBlending
+            opacity: 0.8
         });
 
-        const points = new THREE.Points(geo, mat);
-        scene.add(points);
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
 
-        function animate(t) {
+        // 3. Animation Logic
+        let step = 0;
+        function animate() {
             requestAnimationFrame(animate);
-            mat.uniforms.uTime.value = t * 0.001;
-            mat.uniforms.uTemplate.value = (Math.sin(t * 0.001) > 0) ? 1 : 0;
+            step += 0.01;
+
+            // Rotate particles to show it's working
+            particles.rotation.y += 0.002;
+            particles.rotation.x += 0.001;
+
+            // Simple Pulse effect
+            const scale = 1 + Math.sin(step) * 0.3;
+            particles.scale.set(scale, scale, scale);
+
             renderer.render(scene, camera);
         }
-        animate(0);
 
+        animate();
+
+        // 4. Handle Window Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        console.log("Particle Engine Started Successfully");
     </script>
 </body>
 </html>
