@@ -3,148 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Hand Gesture Particles</title>
+    <title>Hand Particle System</title>
     <style>
         body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
-        #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 10px; font-size: 13px; z-index: 10; border-radius: 5px; border: 1px solid #333; }
-        video { transform: scaleX(-1); position: absolute; bottom: 10px; right: 10px; width: 100px; height: 75px; border: 1px solid #555; border-radius: 5px; z-index: 5; }
-        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+        #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.8); padding: 10px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
+        #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 100; display: flex; gap: 10px; }
+        button { padding: 12px 20px; background: #222; color: #fff; border: 1px solid #555; border-radius: 5px; cursor: pointer; }
+        video { transform: scaleX(-1); position: absolute; top: 10px; right: 10px; width: 80px; height: 60px; border: 1px solid #333; z-index: 50; }
+        canvas { display: block; position: absolute; top: 0; left: 0; }
     </style>
 </head>
 <body>
-    <div id="status">Loading Engine...</div>
+    <div id="status">Initializing...</div>
+    <div id="controls">
+        <button onclick="setShape(0)">Heart</button>
+        <button onclick="setShape(1)">Flower</button>
+        <button onclick="setShape(2)">Saturn</button>
+    </div>
     <video id="webcam" autoplay playsinline muted></video>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
 
     <script>
         const statusEl = document.getElementById('status');
         const videoElement = document.getElementById('webcam');
+        
+        // Error logging for mobile
+        window.onerror = function(msg) {
+            statusEl.innerHTML = "ERROR: " + msg;
+            statusEl.style.color = "red";
+        };
 
-        // --- 1. THREE.JS ENGINE ---
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
-        camera.position.z = 30;
+        let scene, camera, renderer, particles, material;
+        const particleCount = 6000;
 
-        // --- 2. PARTICLE SYSTEM ---
-        const particleCount = 8000; // Lower count for better mobile stability
-        const geometry = new THREE.BufferGeometry();
-        const indices = new Float32Array(particleCount);
-        for (let i = 0; i < particleCount; i++) indices[i] = i;
-        geometry.setAttribute('aIndex', new THREE.BufferAttribute(indices, 1));
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
 
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uExpand: { value: 0.2 },
-                uTemplate: { value: 0 }
-            },
-            vertexShader: `
-                uniform float uTime;
-                uniform float uExpand;
-                uniform float uTemplate;
-                attribute float aIndex;
-                varying vec3 vColor;
+            renderer = new THREE.WebGLRenderer({ antialias: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 1);
+            document.body.appendChild(renderer.domElement);
 
-                void main() {
-                    float i = aIndex / ${particleCount}.0;
-                    float angle = i * 6.28318;
-                    vec3 pos = vec3(0.0);
+            const geo = new THREE.BufferGeometry();
+            const indices = new Float32Array(particleCount);
+            for (let i = 0; i < particleCount; i++) indices[i] = i;
+            geo.setAttribute('aIndex', new THREE.BufferAttribute(indices, 1));
 
-                    // Shape Logic
-                    if(uTemplate < 0.5) { // Heart
-                        pos.x = 16.0 * pow(sin(angle), 3.0);
-                        pos.y = 13.0 * cos(angle) - 5.0 * cos(2.0*angle) - 2.0*cos(3.0*angle) - cos(4.0*angle);
-                    } else if(uTemplate < 1.5) { // Flower
-                        float r = 10.0 + 3.0 * sin(angle * 6.0 + uTime);
-                        pos.x = r * cos(angle);
-                        pos.y = r * sin(angle);
-                    } else { // Circle/Ring
-                        pos.x = 15.0 * cos(angle);
-                        pos.y = 15.0 * sin(angle);
-                        pos.z = sin(uTime + angle * 5.0) * 2.0;
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uExpand: { value: 0.5 },
+                    uTemplate: { value: 0 }
+                },
+                vertexShader: `
+                    uniform float uTime;
+                    uniform float uExpand;
+                    uniform float uTemplate;
+                    attribute float aIndex;
+                    varying vec3 vColor;
+                    void main() {
+                        float i = aIndex / ${particleCount}.0;
+                        float a = i * 6.283;
+                        vec3 p = vec3(0.0);
+                        if(uTemplate < 0.5) {
+                            p.x = 16.0*pow(sin(a),3.0);
+                            p.y = 13.0*cos(a)-5.0*cos(2.0*a)-2.0*cos(3.0*a)-cos(4.0*a);
+                        } else if(uTemplate < 1.5) {
+                            float r = 10.0 + 3.0*sin(a*6.0+uTime);
+                            p.x = r*cos(a); p.y = r*sin(a);
+                        } else {
+                            p.x = 15.0*cos(a); p.y = 15.0*sin(a); p.z = sin(a*4.0)*3.0;
+                        }
+                        p *= (0.3 + uExpand * 1.5);
+                        vColor = vec3(0.0, 0.8, 1.0);
+                        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                        gl_PointSize = 4.0 * (300.0 / -mv.z);
+                        gl_Position = projectionMatrix * mv;
                     }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    void main() {
+                        if(length(gl_PointCoord - 0.5) > 0.5) discard;
+                        gl_FragColor = vec4(vColor, 1.0);
+                    }
+                `,
+                transparent: true,
+                blending: THREE.AdditiveBlending
+            });
 
-                    pos *= (0.4 + uExpand * 1.5);
-                    vColor = vec3(0.4, 0.8, 1.0); // Bright Blue
-                    
-                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                    gl_PointSize = (6.0) * (300.0 / -mvPosition.z);
-                    gl_Position = projectionMatrix * mvPosition;
-                }
-            `,
-            fragmentShader: `
-                varying vec3 vColor;
-                void main() {
-                    float d = length(gl_PointCoord - 0.5);
-                    if(d > 0.5) discard;
-                    gl_FragColor = vec4(vColor, 1.0 - (d * 2.0));
-                }
-            `,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthTest: false
-        });
+            particles = new THREE.Points(geo, material);
+            scene.add(particles);
+            animate();
+            statusEl.innerText = "Three.js Ready. Loading Hands...";
+        }
 
-        const particles = new THREE.Points(geometry, material);
-        scene.add(particles);
-
-        // --- 3. ANIMATION LOOP ---
         function animate() {
             requestAnimationFrame(animate);
-            material.uniforms.uTime.value += 0.03;
-            particles.rotation.y += 0.005;
+            if(material) material.uniforms.uTime.value += 0.05;
+            if(particles) particles.rotation.y += 0.01;
             renderer.render(scene, camera);
         }
-        animate();
-        statusEl.innerText = "Status: Engine Ready. Waiting for Camera...";
 
-        // --- 4. HAND TRACKING ---
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
+        window.setShape = function(id) {
+            if(material) material.uniforms.uTemplate.value = id;
+        };
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0, // 0 is faster for mobile
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
+        // Initialize Three.js immediately
+        initThree();
 
-        hands.onResults((results) => {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const landmarks = results.multiHandLandmarks[0];
-                statusEl.innerText = "Status: Tracking Hand!";
+        // --- HANDS SETUP ---
+        try {
+            const hands = new Hands({
+                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+            });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 0 });
+            hands.onResults((res) => {
+                if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                    const lm = res.multiHandLandmarks[0];
+                    const dist = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+                    material.uniforms.uExpand.value = dist * 3.0;
+                    statusEl.innerText = "Tracking Hand!";
+                }
+            });
 
-                // Pinch detection (Thumb 4, Index 8)
-                const t = landmarks[4];
-                const id = landmarks[8];
-                const dist = Math.sqrt(Math.pow(t.x-id.x,2) + Math.pow(t.y-id.y,2));
-                material.uniforms.uExpand.value = dist * 2.5;
-
-                // Rotation based on hand position
-                particles.rotation.z = (landmarks[9].x - 0.5) * 2;
-            } else {
-                statusEl.innerText = "Status: Hand not found";
-            }
-        });
-
-        const cam = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({image: videoElement}); },
-            width: 480, height: 360
-        });
-        
-        cam.start().then(() => {
-            statusEl.innerText = "Status: Camera Active!";
-        }).catch(err => {
-            statusEl.innerText = "Error: " + err;
-        });
+            const cam = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({image: videoElement}); },
+                width: 480, height: 360
+            });
+            cam.start();
+        } catch (e) {
+            statusEl.innerText = "Hand Tracker Failed: " + e;
+        }
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
