@@ -1,18 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Hand-Controlled Particles</title>
+    <title>Hand Particle System</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; }
+        body { margin: 0; background: #000; overflow: hidden; }
         canvas { display: block; }
-        #video-feed { position: absolute; top: 0; left: 0; opacity: 0; } /* Hide the actual video feed */
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    </head>
+</head>
 <body>
-    <video id="video-feed" autoplay playsinline></video>
-    <script type="module" src="main.js"></script>
+    <script>
+        // Check if Three.js loaded
+        if (typeof THREE === 'undefined') {
+            document.body.innerHTML = "<h1 style='color:white'>Three.js failed to load. Check internet.</h1>";
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        camera.position.z = 20;
+
+        const count = 15000;
+        const geo = new THREE.BufferGeometry();
+        const pos = new Float32Array(count * 3);
+        const index = new Float32Array(count);
+
+        for(let i=0; i<count; i++) {
+            index[i] = i;
+            pos[i*3] = (Math.random()-0.5)*10;
+            pos[i*3+1] = (Math.random()-0.5)*10;
+            pos[i*3+2] = (Math.random()-0.5)*10;
+        }
+
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('aIndex', new THREE.BufferAttribute(index, 1));
+
+        const mat = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 }, uTemplate: { value: 0 } },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uTemplate;
+                attribute float aIndex;
+                varying vec3 vColor;
+                void main() {
+                    float angle = (aIndex / 15000.0) * 6.28;
+                    vec3 p = vec3(cos(angle)*10.0, sin(angle)*10.0, 0.0);
+                    if(uTemplate > 0.5) { // Switch to Heart
+                         p.x = 16.0 * pow(sin(angle), 3.0) * 0.5;
+                         p.y = (13.0 * cos(angle) - 5.0 * cos(2.0*angle) - 2.0*cos(3.0*angle) - cos(4.0*angle)) * 0.5;
+                    }
+                    vColor = vec3(0.5 + 0.5*sin(uTime + angle), 0.8, 1.0);
+                    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                    gl_PointSize = 3.0 * (100.0 / -mv.z);
+                    gl_Position = projectionMatrix * mv;
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                void main() {
+                    if(length(gl_PointCoord - 0.5) > 0.5) discard;
+                    gl_FragColor = vec4(vColor, 1.0);
+                }
+            `,
+            transparent: true,
+            blending: THREE.AdditiveBlending
+        });
+
+        const points = new THREE.Points(geo, mat);
+        scene.add(points);
+
+        function animate(t) {
+            requestAnimationFrame(animate);
+            mat.uniforms.uTime.value = t * 0.001;
+            mat.uniforms.uTemplate.value = (Math.sin(t * 0.001) > 0) ? 1 : 0;
+            renderer.render(scene, camera);
+        }
+        animate(0);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
 </body>
 </html>
